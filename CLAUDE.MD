@@ -1,66 +1,66 @@
-# VoiceControlFleet - Claude Assistant Guide
+# VoiceControlFleet - Claude アシスタントガイド
 
-## Project Overview
+## プロジェクト概要
 
-VoiceControlFleet is a voice-controlled fleet game where players can command and control a fleet using voice commands.
+VoiceControlFleetは、プレイヤーが音声コマンドで艦隊を指揮・制御できる音声制御艦隊ゲームです。
 
-## Project Structure
+## プロジェクト構成
 
 ```
 VoiceControlFleet/
-├── README.md          # Project documentation
-└── CLAUDE.MD          # This file - AI assistant context
+├── README.md          # プロジェクトドキュメント
+└── CLAUDE.MD          # このファイル - AIアシスタント用コンテキスト
 ```
 
-## Tech Stack
+## 技術スタック
 
-*To be documented as development progresses*
+*開発の進行に伴って記載予定*
 
-## Development Guidelines
+## 開発ガイドライン
 
-### Code Style
-- Follow consistent naming conventions
-- Write clear, self-documenting code
-- Add comments only where logic isn't self-evident
+### コードスタイル
+- 一貫した命名規則に従う
+- 明確で自己文書化されたコードを書く
+- ロジックが自明でない箇所にのみコメントを追加
 
-### Git Workflow
-- Work on feature branches prefixed with `claude/`
-- Write clear, descriptive commit messages
-- Keep commits focused and atomic
+### Git ワークフロー
+- `claude/` で始まる機能ブランチで作業
+- 明確で説明的なコミットメッセージを書く
+- コミットは焦点を絞り、アトミックに保つ
 
-## Testing
+## テスト
 
-*Testing strategy to be defined*
+*テスト戦略は今後定義予定*
 
-## Build & Deployment
+## ビルド＆デプロイ
 
-*Build and deployment instructions to be added*
+*ビルドとデプロイの手順は後日追加予定*
 
-## Current Development Status
+## 現在の開発状況
 
-Project is in initial setup phase.
+プロジェクトは初期セットアップ段階です。
 
-## Key Features (Planned)
+## 主要機能（予定）
 
-- Voice command recognition
-- Fleet control and management
-- Real-time game mechanics
-- Multiplayer capabilities (TBD)
+- 音声コマンド認識
+- 艦隊の制御と管理
+- リアルタイムゲームメカニクス
+- マルチプレイヤー機能（検討中）
 
-## Important Notes for Claude
+## Claude への重要な注意事項
 
-- This is an early-stage project
-- Avoid over-engineering - keep solutions simple and focused
-- Only add features that are explicitly requested
-- Security considerations: Validate all external inputs, especially voice commands
+- これは初期段階のプロジェクトです
+- 過度な設計を避け、シンプルで焦点を絞った解決策を維持
+- 明示的に要求された機能のみを追加
+- セキュリティ考慮事項：すべての外部入力、特に音声コマンドを検証
 
-## Questions to Address
+## 検討すべき質問
 
-1. What technology stack will be used for voice recognition?
-2. What game engine or framework will power the fleet mechanics?
-3. Will this be web-based, desktop, or mobile?
-4. What's the target platform and deployment strategy?
+1. 音声認識にはどの技術スタックを使用するか？
+2. 艦隊メカニクスを動かすゲームエンジンまたはフレームワークは何か？
+3. Web ベース、デスクトップ、またはモバイルか？
+4. ターゲットプラットフォームとデプロイ戦略は？
 
 ---
 
-*Last updated: 2026-01-16*
+*最終更新: 2026-01-16*
