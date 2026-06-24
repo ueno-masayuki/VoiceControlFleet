@@ -1,0 +1,30 @@
+{
+  "name": "voice-control-fleet",
+  "version": "0.1.0",
+  "description": "音声で指揮する、Webベースのリアルタイム艦隊戦略ゲーム",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "keywords": [
+    "game",
+    "rts",
+    "voice-control",
+    "llm",
+    "japanese-navy"
+  ],
+  "author": "ueno@osakac.ac.jp",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11"
+  },
+  "dependencies": {}
+}

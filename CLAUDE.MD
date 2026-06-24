@@ -18,8 +18,27 @@ VoiceControlFleetは、Webブラウザ上で動作するリアルタイム戦略
 
 ```
 VoiceControlFleet/
-├── README.md          # プロジェクトドキュメント
-└── CLAUDE.MD          # このファイル - AIアシスタント用コンテキスト
+├── src/
+│   ├── main.ts              # エントリーポイント
+│   ├── game/
+│   │   └── Game.ts          # メインゲームクラス
+│   ├── llm/                 # LLM統合（未実装）
+│   ├── voice/               # 音声認識（未実装）
+│   ├── ui/                  # UIコンポーネント（未実装）
+│   ├── types/
+│   │   └── index.ts         # TypeScript型定義
+│   ├── utils/               # ユーティリティ（未実装）
+│   └── styles/
+│       └── main.css         # メインスタイルシート
+├── public/                  # 静的ファイル
+├── index.html               # HTMLエントリー
+├── package.json             # 依存関係管理
+├── tsconfig.json            # TypeScript設定
+├── vite.config.ts           # Vite設定
+├── .eslintrc.json           # ESLint設定
+├── .gitignore               # Git除外設定
+├── README.md                # プロジェクトドキュメント
+└── CLAUDE.MD                # このファイル - AIアシスタント用コンテキスト
 ```
 
 ## ゲーム仕様
@@ -109,7 +128,19 @@ VoiceControlFleet/
 
 ## 現在の開発状況
 
-プロジェクトは初期セットアップ段階です。
+### 完了
+- ✅ プロジェクト初期セットアップ
+- ✅ TypeScript + Vite 開発環境構築
+- ✅ 基本的なゲームループとCanvas描画システム
+- ✅ UI基盤（ヘッダー、フッター、艦隊パネル）
+- ✅ 型定義の基礎
+
+### 次のステップ
+- ⏳ 艦隊システムの実装
+- ⏳ LLM統合（音声コマンド解釈）
+- ⏳ 音声認識システム
+- ⏳ ゲームマスター機能
+- ⏳ 敵AI
 
 ## 主要機能（予定）
 
