@@ -4,11 +4,14 @@
  * ゲーム全体のライフサイクルと各システムを管理
  */
 
+import { Fleet } from './Fleet'
+
 export class Game {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private running: boolean = false
   private lastTime: number = 0
+  private playerFleet: Fleet
 
   constructor() {
     // キャンバスの作成と設定
@@ -34,6 +37,14 @@ export class Game {
     // ウィンドウリサイズ対応
     this.resizeCanvas()
     window.addEventListener('resize', () => this.resizeCanvas())
+
+    // 艦隊の初期化
+    this.playerFleet = new Fleet('player', 'プレイヤー艦隊')
+    this.playerFleet.initializePlayerFleet(200, 200)
+    console.log('⚓ 艦隊を初期化しました:', this.playerFleet.ships.length, '隻')
+
+    // マウスイベントの設定
+    this.setupMouseEvents()
   }
 
   /**
@@ -78,6 +89,49 @@ export class Game {
   }
 
   /**
+   * マウスイベントの設定
+   */
+  private setupMouseEvents(): void {
+    // クリックで艦船を選択
+    this.canvas.addEventListener('click', (e) => {
+      const rect = this.canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+
+      const ship = this.playerFleet.getShipAtPosition(x, y)
+
+      if (ship) {
+        // Shiftキーで複数選択
+        if (!e.shiftKey) {
+          this.playerFleet.deselectAll()
+        }
+        ship.isSelected = !ship.isSelected
+        console.log(`🎯 ${ship.name} を選択`)
+      } else {
+        this.playerFleet.deselectAll()
+      }
+
+      this.updateFleetPanel()
+    })
+
+    // 右クリックで移動命令
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+
+      const rect = this.canvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+
+      const selectedShips = this.playerFleet.getSelectedShips()
+
+      if (selectedShips.length > 0) {
+        selectedShips.forEach((ship) => ship.setTarget({ x, y }))
+        console.log(`🎯 選択艦 ${selectedShips.length} 隻に移動命令`)
+      }
+    })
+  }
+
+  /**
    * キャンバスのリサイズ
    */
   private resizeCanvas(): void {
@@ -93,6 +147,9 @@ export class Game {
 
     this.running = true
     console.log('🎮 ゲームループ開始')
+
+    // 艦隊パネルの初期表示
+    this.updateFleetPanel()
 
     this.lastTime = performance.now()
     this.gameLoop(this.lastTime)
@@ -120,9 +177,9 @@ export class Game {
   /**
    * ゲーム状態の更新
    */
-  private update(_deltaTime: number): void {
-    // ゲームロジックの更新
-    // TODO: 艦隊の更新、敵の更新、衝突判定等
+  private update(deltaTime: number): void {
+    // 艦隊の更新
+    this.playerFleet.update(deltaTime)
   }
 
   /**
@@ -143,22 +200,11 @@ export class Game {
     // グリッド描画（海面）
     this.drawGrid()
 
-    // テスト: 中央にメッセージ表示
-    this.ctx.fillStyle = '#4fc3f7'
-    this.ctx.font = '24px "Segoe UI"'
-    this.ctx.textAlign = 'center'
-    this.ctx.fillText(
-      'ゲームシステム初期化完了',
-      this.canvas.width / 2,
-      this.canvas.height / 2
-    )
-    this.ctx.font = '16px "Segoe UI"'
-    this.ctx.fillStyle = '#90caf9'
-    this.ctx.fillText(
-      '艦隊システムを実装中...',
-      this.canvas.width / 2,
-      this.canvas.height / 2 + 40
-    )
+    // 艦隊の描画
+    this.playerFleet.render(this.ctx)
+
+    // 操作ヘルプ
+    this.drawHelp()
   }
 
   /**
@@ -184,6 +230,69 @@ export class Game {
       this.ctx.lineTo(this.canvas.width, y)
       this.ctx.stroke()
     }
+  }
+
+  /**
+   * 操作ヘルプの描画
+   */
+  private drawHelp(): void {
+    const help = [
+      '左クリック: 艦船を選択',
+      '右クリック: 移動命令',
+      'Shift+クリック: 複数選択',
+    ]
+
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
+    this.ctx.fillRect(10, this.canvas.height - 80, 200, 70)
+
+    this.ctx.fillStyle = '#90caf9'
+    this.ctx.font = '12px "Segoe UI"'
+    this.ctx.textAlign = 'left'
+
+    help.forEach((text, index) => {
+      this.ctx.fillText(text, 20, this.canvas.height - 60 + index * 20)
+    })
+  }
+
+  /**
+   * 艦隊パネルの更新
+   */
+  private updateFleetPanel(): void {
+    const fleetList = document.getElementById('fleet-list')
+    if (!fleetList) return
+
+    const summary = this.playerFleet.getSummary()
+    const hpPercent = Math.round((summary.totalHp / summary.maxHp) * 100)
+
+    let html = `
+      <div style="margin-bottom: 1rem;">
+        <div style="color: #90caf9;">艦船数: ${summary.active}/${summary.total}</div>
+        <div style="color: #90caf9;">総HP: ${hpPercent}%</div>
+      </div>
+    `
+
+    this.playerFleet.ships.forEach((ship) => {
+      const selected = ship.isSelected ? '✓' : ''
+      const hpRatio = (ship.hp / ship.maxHp) * 100
+      const color = hpRatio > 50 ? '#66bb6a' : hpRatio > 25 ? '#ffa726' : '#ef5350'
+
+      html += `
+        <div style="
+          margin-bottom: 0.5rem;
+          padding: 0.5rem;
+          background: rgba(26, 41, 64, 0.5);
+          border-radius: 5px;
+          border-left: 3px solid ${color};
+        ">
+          <div style="display: flex; justify-content: space-between;">
+            <span>${selected} ${ship.name}</span>
+            <span style="color: ${color};">${Math.round(hpRatio)}%</span>
+          </div>
+        </div>
+      `
+    })
+
+    fleetList.innerHTML = html
   }
 
   /**
