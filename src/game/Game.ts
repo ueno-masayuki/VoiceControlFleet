@@ -120,7 +120,7 @@ export class Game {
   /**
    * ゲーム状態の更新
    */
-  private update(deltaTime: number): void {
+  private update(_deltaTime: number): void {
     // ゲームロジックの更新
     // TODO: 艦隊の更新、敵の更新、衝突判定等
   }
