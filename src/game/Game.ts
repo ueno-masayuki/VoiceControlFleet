@@ -5,6 +5,8 @@
  */
 
 import { Fleet } from './Fleet'
+import { LLMService } from '@/llm/LLMService'
+import { CommandInterpreter } from '@/llm/CommandInterpreter'
 
 export class Game {
   private canvas: HTMLCanvasElement
@@ -12,6 +14,9 @@ export class Game {
   private running: boolean = false
   private lastTime: number = 0
   private playerFleet: Fleet
+  private llmService: LLMService
+  private commandInterpreter: CommandInterpreter
+  private commandHistory: string[] = []
 
   constructor() {
     // キャンバスの作成と設定
@@ -43,6 +48,11 @@ export class Game {
     this.playerFleet.initializePlayerFleet(200, 200)
     console.log('⚓ 艦隊を初期化しました:', this.playerFleet.ships.length, '隻')
 
+    // LLMサービスの初期化
+    this.llmService = new LLMService()
+    this.commandInterpreter = new CommandInterpreter()
+    console.log('🤖 LLMサービスを初期化しました')
+
     // マウスイベントの設定
     this.setupMouseEvents()
   }
@@ -66,15 +76,42 @@ export class Game {
     `
     app.appendChild(header)
 
-    // フッター（コマンド表示）の作成
+    // フッター（コマンド入力）の作成
     const footer = document.createElement('div')
     footer.className = 'game-footer'
     footer.innerHTML = `
-      <div class="command-display">
-        音声コマンドを待機中... 例: 「全艦、北東に移動」
+      <div style="display: flex; gap: 1rem; align-items: center;">
+        <input
+          type="text"
+          id="command-input"
+          placeholder="音声コマンドを入力... 例: 「全艦、北東に移動」"
+          style="
+            flex: 1;
+            padding: 0.7rem;
+            background: rgba(26, 41, 64, 0.8);
+            border: 2px solid #4fc3f7;
+            border-radius: 5px;
+            color: #90caf9;
+            font-size: 1rem;
+            font-family: 'Segoe UI', sans-serif;
+          "
+        />
+        <button
+          id="command-submit"
+          class="btn"
+          style="padding: 0.7rem 1.5rem;"
+        >
+          🎯 実行
+        </button>
+      </div>
+      <div id="command-display" class="command-display" style="margin-top: 0.5rem; min-height: 1.5rem;">
+        準備完了
       </div>
     `
     app.appendChild(footer)
+
+    // コマンド入力のイベント設定
+    this.setupCommandInput()
 
     // 艦隊パネルの作成
     const fleetPanel = document.createElement('div')
@@ -86,6 +123,75 @@ export class Game {
       </div>
     `
     app.appendChild(fleetPanel)
+  }
+
+  /**
+   * コマンド入力のイベント設定
+   */
+  private setupCommandInput(): void {
+    const input = document.getElementById('command-input') as HTMLInputElement
+    const submit = document.getElementById('command-submit') as HTMLButtonElement
+
+    if (!input || !submit) return
+
+    const executeCommand = async () => {
+      const text = input.value.trim()
+      if (!text) return
+
+      this.displayCommand(`📝 入力: ${text}`)
+      input.value = ''
+      input.disabled = true
+      submit.disabled = true
+
+      try {
+        // LLMで解釈
+        const interpretation = await this.llmService.interpretCommand(text)
+
+        // コマンド表示を更新
+        this.displayCommand(`🤖 解釈: ${interpretation.command}`)
+
+        // コマンドを実行
+        this.commandInterpreter.executeCommand(
+          interpretation,
+          this.playerFleet,
+          this.canvas.width,
+          this.canvas.height
+        )
+
+        // 履歴に追加
+        this.commandHistory.push(text)
+
+        // 艦隊パネルを更新
+        this.updateFleetPanel()
+      } catch (error) {
+        console.error('コマンド実行エラー:', error)
+        this.displayCommand('❌ コマンドの実行に失敗しました')
+      } finally {
+        input.disabled = false
+        submit.disabled = false
+        input.focus()
+      }
+    }
+
+    // ボタンクリック
+    submit.addEventListener('click', executeCommand)
+
+    // Enterキー
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        executeCommand()
+      }
+    })
+  }
+
+  /**
+   * コマンド表示を更新
+   */
+  private displayCommand(text: string): void {
+    const display = document.getElementById('command-display')
+    if (display) {
+      display.textContent = text
+    }
   }
 
   /**

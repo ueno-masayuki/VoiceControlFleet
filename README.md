@@ -61,6 +61,22 @@ npm run preview
 
 開発サーバーは `http://localhost:3000` で起動します。
 
+### LLM API設定（オプション）
+
+LLMによる高度な音声コマンド解釈を使用する場合：
+
+1. `.env`ファイルを作成
+   ```bash
+   cp .env.example .env
+   ```
+
+2. APIキーを設定
+   ```
+   VITE_ANTHROPIC_API_KEY=your_api_key_here
+   ```
+
+APIキーがない場合でも、デモモード（パターンマッチング）で動作します。
+
 ## ドキュメント
 
 詳細な技術仕様とゲーム設計については、[CLAUDE.MD](./CLAUDE.MD) を参照してください。
