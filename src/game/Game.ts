@@ -7,6 +7,10 @@
 import { Fleet } from './Fleet'
 import { LLMService } from '@/llm/LLMService'
 import { CommandInterpreter } from '@/llm/CommandInterpreter'
+import {
+  VoiceRecognitionService,
+  VoiceRecognitionStatus,
+} from '@/voice/VoiceRecognitionService'
 
 export class Game {
   private canvas: HTMLCanvasElement
@@ -17,6 +21,8 @@ export class Game {
   private llmService: LLMService
   private commandInterpreter: CommandInterpreter
   private commandHistory: string[] = []
+  private voiceService: VoiceRecognitionService
+  private isProcessingCommand: boolean = false
 
   constructor() {
     // キャンバスの作成と設定
@@ -53,6 +59,14 @@ export class Game {
     this.commandInterpreter = new CommandInterpreter()
     console.log('🤖 LLMサービスを初期化しました')
 
+    // 音声認識サービスの初期化
+    this.voiceService = new VoiceRecognitionService({
+      onResult: (text, isFinal) => this.handleVoiceResult(text, isFinal),
+      onStatusChange: (status) => this.handleVoiceStatusChange(status),
+      onError: (message) => this.displayCommand(`❌ ${message}`),
+    })
+    console.log('🎤 音声認識サービスを初期化しました')
+
     // マウスイベントの設定
     this.setupMouseEvents()
   }
@@ -69,12 +83,18 @@ export class Game {
     header.className = 'game-header'
     header.innerHTML = `
       <div class="game-title">⚓ VoiceControlFleet</div>
-      <div class="voice-indicator">
-        <span>🎤</span>
-        <span>音声認識: 準備中</span>
+      <div id="voice-indicator" class="voice-indicator" style="cursor: pointer;">
+        <span id="voice-icon">🎤</span>
+        <span id="voice-status">音声認識: 準備中</span>
       </div>
     `
     app.appendChild(header)
+
+    // 音声認識トグルのイベント設定
+    const voiceIndicator = document.getElementById('voice-indicator')
+    voiceIndicator?.addEventListener('click', () => {
+      this.voiceService.toggle()
+    })
 
     // フッター（コマンド入力）の作成
     const footer = document.createElement('div')
@@ -138,39 +158,8 @@ export class Game {
       const text = input.value.trim()
       if (!text) return
 
-      this.displayCommand(`📝 入力: ${text}`)
       input.value = ''
-      input.disabled = true
-      submit.disabled = true
-
-      try {
-        // LLMで解釈
-        const interpretation = await this.llmService.interpretCommand(text)
-
-        // コマンド表示を更新
-        this.displayCommand(`🤖 解釈: ${interpretation.command}`)
-
-        // コマンドを実行
-        this.commandInterpreter.executeCommand(
-          interpretation,
-          this.playerFleet,
-          this.canvas.width,
-          this.canvas.height
-        )
-
-        // 履歴に追加
-        this.commandHistory.push(text)
-
-        // 艦隊パネルを更新
-        this.updateFleetPanel()
-      } catch (error) {
-        console.error('コマンド実行エラー:', error)
-        this.displayCommand('❌ コマンドの実行に失敗しました')
-      } finally {
-        input.disabled = false
-        submit.disabled = false
-        input.focus()
-      }
+      await this.processCommand(text)
     }
 
     // ボタンクリック
@@ -182,6 +171,92 @@ export class Game {
         executeCommand()
       }
     })
+  }
+
+  /**
+   * テキスト・音声共通のコマンド処理
+   */
+  private async processCommand(text: string): Promise<void> {
+    if (!text || this.isProcessingCommand) return
+
+    const input = document.getElementById('command-input') as HTMLInputElement | null
+    const submit = document.getElementById('command-submit') as HTMLButtonElement | null
+
+    this.isProcessingCommand = true
+    this.displayCommand(`📝 入力: ${text}`)
+
+    if (input) input.disabled = true
+    if (submit) submit.disabled = true
+
+    try {
+      // LLMで解釈
+      const interpretation = await this.llmService.interpretCommand(text)
+
+      // コマンド表示を更新
+      this.displayCommand(`🤖 解釈: ${interpretation.command}`)
+
+      // コマンドを実行
+      this.commandInterpreter.executeCommand(
+        interpretation,
+        this.playerFleet,
+        this.canvas.width,
+        this.canvas.height
+      )
+
+      // 履歴に追加
+      this.commandHistory.push(text)
+
+      // 艦隊パネルを更新
+      this.updateFleetPanel()
+    } catch (error) {
+      console.error('コマンド実行エラー:', error)
+      this.displayCommand('❌ コマンドの実行に失敗しました')
+    } finally {
+      this.isProcessingCommand = false
+      if (input) {
+        input.disabled = false
+        input.focus()
+      }
+      if (submit) submit.disabled = false
+    }
+  }
+
+  /**
+   * 音声認識結果のハンドリング
+   */
+  private handleVoiceResult(text: string, isFinal: boolean): void {
+    if (isFinal) {
+      // 確定した音声をコマンドとして実行
+      void this.processCommand(text)
+    } else {
+      // 認識中のテキストを暫定表示
+      this.displayCommand(`🎤 認識中: ${text}`)
+    }
+  }
+
+  /**
+   * 音声認識ステータスのハンドリング
+   */
+  private handleVoiceStatusChange(status: VoiceRecognitionStatus): void {
+    const icon = document.getElementById('voice-icon')
+    const statusText = document.getElementById('voice-status')
+    const indicator = document.getElementById('voice-indicator')
+
+    const statusConfig: Record<VoiceRecognitionStatus, { icon: string; text: string }> = {
+      idle: { icon: '🎤', text: '音声認識: 停止中（クリックで開始）' },
+      listening: { icon: '🔴', text: '音声認識: 聞き取り中...' },
+      processing: { icon: '⏳', text: '音声認識: 処理中...' },
+      error: { icon: '⚠️', text: '音声認識: エラー' },
+      unsupported: { icon: '🚫', text: '音声認識: 非対応ブラウザ' },
+    }
+
+    const config = statusConfig[status]
+    if (icon) icon.textContent = config.icon
+    if (statusText) statusText.textContent = config.text
+
+    if (indicator) {
+      indicator.classList.toggle('active', status === 'listening')
+    }
   }
 
   /**
@@ -346,17 +421,18 @@ export class Game {
       '左クリック: 艦船を選択',
       '右クリック: 移動命令',
       'Shift+クリック: 複数選択',
+      '🎤アイコン: 音声認識ON/OFF',
     ]
 
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
-    this.ctx.fillRect(10, this.canvas.height - 80, 200, 70)
+    this.ctx.fillRect(10, this.canvas.height - 100, 220, 90)
 
     this.ctx.fillStyle = '#90caf9'
     this.ctx.font = '12px "Segoe UI"'
     this.ctx.textAlign = 'left'
 
     help.forEach((text, index) => {
-      this.ctx.fillText(text, 20, this.canvas.height - 60 + index * 20)
+      this.ctx.fillText(text, 20, this.canvas.height - 80 + index * 20)
     })
   }
 
