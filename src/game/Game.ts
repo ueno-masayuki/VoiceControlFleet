@@ -8,6 +8,7 @@ import { Fleet } from './Fleet'
 import { EnemyAI } from './EnemyAI'
 import { EnemySpawner } from './EnemySpawner'
 import { CombatSystem, CombatEvent } from './CombatSystem'
+import { CollisionSystem } from './CollisionSystem'
 import { LLMService } from '@/llm/LLMService'
 import { CommandInterpreter } from '@/llm/CommandInterpreter'
 import { GameMasterService, GameMasterState } from '@/llm/GameMasterService'
@@ -43,6 +44,7 @@ export class Game {
   private combatSystem: CombatSystem
   private enemyAI: EnemyAI
   private enemySpawner: EnemySpawner
+  private collisionSystem: CollisionSystem
   private hitEffects: HitEffect[] = []
 
   // ゲームマスター
@@ -93,6 +95,7 @@ export class Game {
     this.combatSystem = new CombatSystem()
     this.enemyAI = new EnemyAI()
     this.enemySpawner = new EnemySpawner()
+    this.collisionSystem = new CollisionSystem()
 
     // LLMサービスの初期化
     this.llmService = new LLMService()
@@ -436,6 +439,9 @@ export class Game {
       // 艦隊の移動更新・撃沈艦の除去
       this.playerFleet.update(deltaTime)
       this.enemyFleet.update(deltaTime)
+
+      // 艦船同士の重なりを解消（複数艦が同一地点に集結するのを防ぐ）
+      this.collisionSystem.resolve([...this.playerFleet.ships, ...this.enemyFleet.ships])
 
       // 次ウェーブのタイマー管理
       this.nextWaveTimer -= deltaTime

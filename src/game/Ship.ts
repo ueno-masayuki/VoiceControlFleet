@@ -165,6 +165,13 @@ export class Ship implements IShip {
   }
 
   /**
+   * 衝突判定用の半径（他艦との最低離隔距離の基準）
+   */
+  getCollisionRadius(): number {
+    return this.getSize() + 6
+  }
+
+  /**
    * 艦種に応じたサイズ
    */
   private getSize(): number {
