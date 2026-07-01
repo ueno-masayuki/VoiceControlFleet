@@ -141,6 +141,37 @@ body {
   padding-bottom: 0.5rem;
 }
 
+/* 敵艦隊パネル */
+.enemy-panel {
+  right: auto;
+  left: 1rem;
+  border-color: var(--warning-red);
+}
+
+.enemy-panel h3 {
+  color: var(--warning-red);
+  border-bottom-color: var(--warning-red);
+}
+
+/* ゲームマスター アナウンス */
+.gm-banner {
+  position: absolute;
+  top: 5.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.7rem 1.5rem;
+  background: rgba(10, 25, 41, 0.92);
+  backdrop-filter: blur(10px);
+  border: 2px solid #ffca28;
+  border-radius: 8px;
+  color: #ffca28;
+  font-weight: bold;
+  font-size: 1.1rem;
+  z-index: 200;
+  box-shadow: 0 0 20px rgba(255, 202, 40, 0.3);
+  white-space: nowrap;
+}
+
 /* ボタン */
 .btn {
   padding: 0.5rem 1rem;

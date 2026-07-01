@@ -22,11 +22,18 @@ export enum ShipType {
   CARRIER = 'CARRIER',          // 空母
 }
 
+// 陣営
+export enum Faction {
+  PLAYER = 'PLAYER',
+  ENEMY = 'ENEMY',
+}
+
 // 艦船の状態
 export interface Ship {
   id: string
   name: string
   type: ShipType
+  faction: Faction
   position: Position
   velocity: Velocity
   hp: number

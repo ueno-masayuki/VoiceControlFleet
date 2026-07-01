@@ -4,13 +4,19 @@
  * 個別の艦船の状態と振る舞いを管理
  */
 
-import { Ship as IShip, Position, Velocity, ShipType } from '@/types'
+import { Ship as IShip, Position, Velocity, ShipType, Faction } from '@/types'
 import { SHIP_COLORS } from './ShipData'
+
+const FACTION_OUTLINE_COLOR: Record<Faction, string> = {
+  [Faction.PLAYER]: '#01579b',
+  [Faction.ENEMY]: '#b71c1c',
+}
 
 export class Ship implements IShip {
   id: string
   name: string
   type: ShipType
+  faction: Faction
   position: Position
   velocity: Velocity
   hp: number
@@ -21,6 +27,7 @@ export class Ship implements IShip {
   isSelected: boolean
 
   private targetPosition: Position | null = null
+  private attackCooldownRemaining: number = 0
 
   constructor(
     id: string,
@@ -30,11 +37,13 @@ export class Ship implements IShip {
     maxHp: number,
     speed: number,
     firepower: number,
-    range: number
+    range: number,
+    faction: Faction = Faction.PLAYER
   ) {
     this.id = id
     this.name = name
     this.type = type
+    this.faction = faction
     this.position = { ...position }
     this.velocity = { x: 0, y: 0 }
     this.hp = maxHp
@@ -106,6 +115,11 @@ export class Ship implements IShip {
     ctx.lineTo(-size / 2, -size / 2)
     ctx.closePath()
     ctx.fill()
+
+    // 陣営を示す輪郭線
+    ctx.lineWidth = 2
+    ctx.strokeStyle = FACTION_OUTLINE_COLOR[this.faction]
+    ctx.stroke()
 
     ctx.restore()
 
@@ -190,6 +204,49 @@ export class Ship implements IShip {
    */
   takeDamage(damage: number): void {
     this.hp = Math.max(0, this.hp - damage)
+  }
+
+  /**
+   * 対象との距離
+   */
+  distanceTo(target: Ship): number {
+    const dx = target.position.x - this.position.x
+    const dy = target.position.y - this.position.y
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  /**
+   * 対象が射程内か
+   */
+  isInRange(target: Ship): boolean {
+    return this.distanceTo(target) <= this.range
+  }
+
+  /**
+   * 攻撃クールダウンの経過
+   */
+  tickCooldown(deltaTime: number): void {
+    if (this.attackCooldownRemaining > 0) {
+      this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - deltaTime)
+    }
+  }
+
+  /**
+   * 射撃可能か（撃沈済みでなく、クールダウンが解けている）
+   */
+  canFire(): boolean {
+    return !this.isSunk() && this.attackCooldownRemaining <= 0
+  }
+
+  /**
+   * 対象を砲撃する。実際に与えたダメージを返す
+   */
+  fire(target: Ship, cooldownSeconds: number): number {
+    const variance = 0.8 + Math.random() * 0.4
+    const damage = Math.round(this.firepower * variance)
+    target.takeDamage(damage)
+    this.attackCooldownRemaining = cooldownSeconds
+    return damage
   }
 
   /**

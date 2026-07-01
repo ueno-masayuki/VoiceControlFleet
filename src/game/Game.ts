@@ -5,12 +5,26 @@
  */
 
 import { Fleet } from './Fleet'
+import { EnemyAI } from './EnemyAI'
+import { EnemySpawner } from './EnemySpawner'
+import { CombatSystem, CombatEvent } from './CombatSystem'
 import { LLMService } from '@/llm/LLMService'
 import { CommandInterpreter } from '@/llm/CommandInterpreter'
+import { GameMasterService, GameMasterState } from '@/llm/GameMasterService'
 import {
   VoiceRecognitionService,
   VoiceRecognitionStatus,
 } from '@/voice/VoiceRecognitionService'
+import { Faction } from '@/types'
+
+interface HitEffect {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  ttl: number
+  color: string
+}
 
 export class Game {
   private canvas: HTMLCanvasElement
@@ -18,11 +32,31 @@ export class Game {
   private running: boolean = false
   private lastTime: number = 0
   private playerFleet: Fleet
+  private enemyFleet: Fleet
   private llmService: LLMService
   private commandInterpreter: CommandInterpreter
   private commandHistory: string[] = []
   private voiceService: VoiceRecognitionService
   private isProcessingCommand: boolean = false
+
+  // 戦闘・敵AI
+  private combatSystem: CombatSystem
+  private enemyAI: EnemyAI
+  private enemySpawner: EnemySpawner
+  private hitEffects: HitEffect[] = []
+
+  // ゲームマスター
+  private gameMaster: GameMasterService
+  private waveNumber: number = 0
+  private nextWaveTimer: number = Infinity
+  private isSpawningWave: boolean = false
+  private elapsedTime: number = 0
+  private gameOver: boolean = false
+
+  // 戦況メッセージ表示
+  private messageQueue: string[] = []
+  private messageTimer: number = 0
+  private readonly MESSAGE_DURATION = 3.5
 
   constructor() {
     // キャンバスの作成と設定
@@ -52,12 +86,19 @@ export class Game {
     // 艦隊の初期化
     this.playerFleet = new Fleet('player', 'プレイヤー艦隊')
     this.playerFleet.initializePlayerFleet(200, 200)
+    this.enemyFleet = new Fleet('enemy', '敵艦隊')
     console.log('⚓ 艦隊を初期化しました:', this.playerFleet.ships.length, '隻')
+
+    // 戦闘・敵AIシステムの初期化
+    this.combatSystem = new CombatSystem()
+    this.enemyAI = new EnemyAI()
+    this.enemySpawner = new EnemySpawner()
 
     // LLMサービスの初期化
     this.llmService = new LLMService()
     this.commandInterpreter = new CommandInterpreter()
-    console.log('🤖 LLMサービスを初期化しました')
+    this.gameMaster = new GameMasterService()
+    console.log('🤖 LLMサービス・ゲームマスターを初期化しました')
 
     // 音声認識サービスの初期化
     this.voiceService = new VoiceRecognitionService({
@@ -95,6 +136,13 @@ export class Game {
     voiceIndicator?.addEventListener('click', () => {
       this.voiceService.toggle()
     })
+
+    // ゲームマスターのアナウンス欄
+    const gmBanner = document.createElement('div')
+    gmBanner.id = 'gm-banner'
+    gmBanner.className = 'gm-banner'
+    gmBanner.style.display = 'none'
+    app.appendChild(gmBanner)
 
     // フッター（コマンド入力）の作成
     const footer = document.createElement('div')
@@ -143,6 +191,17 @@ export class Game {
       </div>
     `
     app.appendChild(fleetPanel)
+
+    // 敵艦隊パネルの作成
+    const enemyPanel = document.createElement('div')
+    enemyPanel.className = 'fleet-panel enemy-panel'
+    enemyPanel.innerHTML = `
+      <h3>敵艦隊情報</h3>
+      <div id="enemy-list">
+        <p>索敵中...</p>
+      </div>
+    `
+    app.appendChild(enemyPanel)
   }
 
   /**
@@ -200,7 +259,8 @@ export class Game {
         interpretation,
         this.playerFleet,
         this.canvas.width,
-        this.canvas.height
+        this.canvas.height,
+        this.enemyFleet
       )
 
       // 履歴に追加
@@ -331,6 +391,10 @@ export class Game {
 
     // 艦隊パネルの初期表示
     this.updateFleetPanel()
+    this.updateEnemyPanel()
+
+    // 最初の敵ウェーブを要求
+    void this.triggerNextWave()
 
     this.lastTime = performance.now()
     this.gameLoop(this.lastTime)
@@ -359,8 +423,149 @@ export class Game {
    * ゲーム状態の更新
    */
   private update(deltaTime: number): void {
-    // 艦隊の更新
-    this.playerFleet.update(deltaTime)
+    this.elapsedTime += deltaTime
+
+    if (!this.gameOver) {
+      // 敵AIの行動更新
+      this.enemyAI.update(this.enemyFleet, this.playerFleet)
+
+      // 戦闘解決（射程内の艦は自動的に交戦する）
+      const events = this.combatSystem.update(deltaTime, this.playerFleet, this.enemyFleet)
+      this.handleCombatEvents(events)
+
+      // 艦隊の移動更新・撃沈艦の除去
+      this.playerFleet.update(deltaTime)
+      this.enemyFleet.update(deltaTime)
+
+      // 次ウェーブのタイマー管理
+      this.nextWaveTimer -= deltaTime
+      if (this.nextWaveTimer <= 0 && !this.isSpawningWave) {
+        this.nextWaveTimer = Infinity
+        void this.triggerNextWave()
+      }
+
+      // 敗北判定
+      if (this.playerFleet.getSummary().active === 0) {
+        this.handleGameOver()
+      }
+    }
+
+    this.updateHitEffects(deltaTime)
+    this.updateBattleMessages(deltaTime)
+  }
+
+  /**
+   * 戦闘イベントの処理（エフェクト・撃沈メッセージ・パネル更新）
+   */
+  private handleCombatEvents(events: CombatEvent[]): void {
+    if (events.length === 0) return
+
+    events.forEach((event) => {
+      this.hitEffects.push({
+        x1: event.attacker.position.x,
+        y1: event.attacker.position.y,
+        x2: event.target.position.x,
+        y2: event.target.position.y,
+        ttl: 0.3,
+        color: event.attacker.faction === Faction.ENEMY ? '#ef5350' : '#4fc3f7',
+      })
+
+      if (event.targetSunk) {
+        const label = event.target.faction === Faction.ENEMY ? '敵' : '味方'
+        this.pushBattleMessage(`💥 ${label}${event.target.name} 撃沈！`)
+      }
+    })
+
+    this.updateFleetPanel()
+    this.updateEnemyPanel()
+  }
+
+  /**
+   * 次の敵ウェーブをゲームマスターに問い合わせて生成
+   */
+  private async triggerNextWave(): Promise<void> {
+    if (this.isSpawningWave) return
+    this.isSpawningWave = true
+
+    const summary = this.playerFleet.getSummary()
+    const state: GameMasterState = {
+      waveNumber: this.waveNumber,
+      elapsedSeconds: this.elapsedTime,
+      playerActive: summary.active,
+      playerTotal: summary.total,
+      playerHpPercent: summary.maxHp > 0 ? Math.round((summary.totalHp / summary.maxHp) * 100) : 0,
+      enemiesRemaining: this.enemyFleet.ships.filter((ship) => !ship.isSunk()).length,
+    }
+
+    try {
+      const decision = await this.gameMaster.decideNextWave(state)
+      this.waveNumber += 1
+
+      const spawnArea = {
+        x: this.canvas.width - 150,
+        y: 80,
+        width: 120,
+        height: Math.max(100, this.canvas.height - 200),
+      }
+      const newShips = this.enemySpawner.spawnWave(decision.ships, spawnArea)
+      this.enemyFleet.addShips(newShips)
+
+      this.pushBattleMessage(`⚔️ ${decision.message}`)
+      this.nextWaveTimer = decision.nextWaveDelay
+      this.updateEnemyPanel()
+    } catch (error) {
+      console.error('ウェーブ生成エラー:', error)
+      this.nextWaveTimer = 20
+    } finally {
+      this.isSpawningWave = false
+    }
+  }
+
+  /**
+   * ゲームオーバー処理
+   */
+  private handleGameOver(): void {
+    this.gameOver = true
+    this.pushBattleMessage('☠️ 全艦喪失… 作戦失敗')
+    console.log('💀 ゲームオーバー')
+  }
+
+  /**
+   * 戦況メッセージをキューに追加
+   */
+  private pushBattleMessage(text: string): void {
+    this.messageQueue.push(text)
+  }
+
+  /**
+   * 戦況メッセージバナーの更新
+   */
+  private updateBattleMessages(deltaTime: number): void {
+    const banner = document.getElementById('gm-banner')
+    if (!banner) return
+
+    if (this.messageTimer > 0) {
+      this.messageTimer -= deltaTime
+      return
+    }
+
+    if (this.messageQueue.length > 0) {
+      banner.textContent = this.messageQueue.shift() ?? ''
+      banner.style.display = 'block'
+      this.messageTimer = this.MESSAGE_DURATION
+    } else {
+      banner.style.display = 'none'
+    }
+  }
+
+  /**
+   * 命中エフェクトの経過更新
+   */
+  private updateHitEffects(deltaTime: number): void {
+    this.hitEffects.forEach((effect) => {
+      effect.ttl -= deltaTime
+    })
+    this.hitEffects = this.hitEffects.filter((effect) => effect.ttl > 0)
   }
 
   /**
@@ -381,11 +586,33 @@ export class Game {
     // グリッド描画（海面）
     this.drawGrid()
 
+    // 命中エフェクト（艦船の下に描画）
+    this.renderHitEffects()
+
     // 艦隊の描画
     this.playerFleet.render(this.ctx)
+    this.enemyFleet.render(this.ctx)
 
     // 操作ヘルプ
     this.drawHelp()
+  }
+
+  /**
+   * 命中エフェクトの描画
+   */
+  private renderHitEffects(): void {
+    this.hitEffects.forEach((effect) => {
+      const alpha = Math.max(0, Math.min(1, effect.ttl / 0.3))
+      this.ctx.save()
+      this.ctx.globalAlpha = alpha
+      this.ctx.strokeStyle = effect.color
+      this.ctx.lineWidth = 2
+      this.ctx.beginPath()
+      this.ctx.moveTo(effect.x1, effect.y1)
+      this.ctx.lineTo(effect.x2, effect.y2)
+      this.ctx.stroke()
+      this.ctx.restore()
+    })
   }
 
   /**
@@ -475,6 +702,53 @@ export class Game {
     })
 
     fleetList.innerHTML = html
+  }
+
+  /**
+   * 敵艦隊パネルの更新
+   */
+  private updateEnemyPanel(): void {
+    const enemyList = document.getElementById('enemy-list')
+    if (!enemyList) return
+
+    const activeShips = this.enemyFleet.ships.filter((ship) => !ship.isSunk())
+
+    if (activeShips.length === 0) {
+      enemyList.innerHTML = `
+        <div style="color: #90caf9;">ウェーブ: ${this.waveNumber}</div>
+        <p style="color: #90caf9; margin-top: 0.5rem;">敵影なし。次の艦隊を索敵中...</p>
+      `
+      return
+    }
+
+    let html = `
+      <div style="margin-bottom: 1rem;">
+        <div style="color: #ef9a9a;">ウェーブ: ${this.waveNumber}</div>
+        <div style="color: #ef9a9a;">敵艦数: ${activeShips.length}隻</div>
+      </div>
+    `
+
+    activeShips.forEach((ship) => {
+      const hpRatio = (ship.hp / ship.maxHp) * 100
+      const color = hpRatio > 50 ? '#66bb6a' : hpRatio > 25 ? '#ffa726' : '#ef5350'
+
+      html += `
+        <div style="
+          margin-bottom: 0.5rem;
+          padding: 0.5rem;
+          background: rgba(26, 41, 64, 0.5);
+          border-radius: 5px;
+          border-left: 3px solid ${color};
+        ">
+          <div style="display: flex; justify-content: space-between;">
+            <span>${ship.name}</span>
+            <span style="color: ${color};">${Math.round(hpRatio)}%</span>
+          </div>
+        </div>
+      `
+    })
+
+    enemyList.innerHTML = html
   }
 
   /**

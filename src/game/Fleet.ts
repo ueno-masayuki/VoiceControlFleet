@@ -4,7 +4,7 @@
  * 複数の艦船をグループとして管理
  */
 
-import { Fleet as IFleet, Position } from '@/types'
+import { Fleet as IFleet, Position, Faction } from '@/types'
 import { Ship } from './Ship'
 import { SHIP_DATABASE, ShipTemplate } from './ShipData'
 
@@ -54,8 +54,23 @@ export class Fleet implements IFleet {
       template.maxHp,
       template.speed,
       template.firepower,
-      template.range
+      template.range,
+      Faction.PLAYER
     )
+  }
+
+  /**
+   * 艦船を1隻追加
+   */
+  addShip(ship: Ship): void {
+    this.ships.push(ship)
+  }
+
+  /**
+   * 艦船を複数追加
+   */
+  addShips(ships: Ship[]): void {
+    this.ships.push(...ships)
   }
 
   /**

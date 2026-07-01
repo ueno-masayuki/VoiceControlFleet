@@ -13,7 +13,8 @@ export class CommandInterpreter {
     interpretation: CommandInterpretation,
     fleet: Fleet,
     canvasWidth: number,
-    canvasHeight: number
+    canvasHeight: number,
+    enemyFleet?: Fleet
   ): void {
     console.log('🎯 コマンド実行:', interpretation)
 
@@ -23,7 +24,7 @@ export class CommandInterpreter {
         break
 
       case GameAction.ATTACK:
-        this.executeAttack(interpretation, fleet)
+        this.executeAttack(interpretation, fleet, enemyFleet)
         break
 
       case GameAction.DEFEND:
@@ -77,18 +78,30 @@ export class CommandInterpreter {
 
   /**
    * 攻撃コマンドを実行
+   *
+   * 指定艦を敵艦隊の中心に向けて前進させる。射程内に入った艦は
+   * CombatSystem により自動的に交戦する。
    */
-  private executeAttack(interpretation: CommandInterpretation, fleet: Fleet): void {
+  private executeAttack(
+    interpretation: CommandInterpretation,
+    fleet: Fleet,
+    enemyFleet?: Fleet
+  ): void {
     const ships = this.getTargetShips(interpretation, fleet)
-
-    ships.forEach((ship) => {
-      console.log(`⚔️ ${ship.name} 攻撃態勢`)
-      // TODO: 実際の攻撃処理を実装
-    })
 
     if (ships.length === 0) {
       console.warn('⚠️ 攻撃対象の艦船が見つかりません')
+      return
     }
+
+    const advancePosition = enemyFleet?.getCenterPosition()
+
+    ships.forEach((ship) => {
+      if (advancePosition) {
+        ship.setTarget(advancePosition)
+      }
+      console.log(`⚔️ ${ship.name} 攻撃態勢で前進`)
+    })
   }
 
   /**
