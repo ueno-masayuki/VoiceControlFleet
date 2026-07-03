@@ -9,8 +9,6 @@ import { SHIP_TYPE_NAMES } from './ShipData'
 export interface EnemyShipStats {
   maxHp: number
   speed: number
-  firepower: number
-  range: number
 }
 
 export interface EnemyWaveComposition {
@@ -28,12 +26,13 @@ export interface SpawnArea {
 /**
  * 敵艦の基本性能
  * プレイヤーの旗艦（旧日本海軍艦）よりやや控えめに設定し、数で押し寄せる構成にする
+ * 兵装・艦体規模は艦種(type)からWeaponData.tsのデータに基づき自動的に決まる
  */
 export const ENEMY_SHIP_STATS: Record<ShipType, EnemyShipStats> = {
-  [ShipType.DESTROYER]: { maxHp: 200, speed: 36, firepower: 40, range: 140 },
-  [ShipType.CRUISER]: { maxHp: 380, speed: 30, firepower: 70, range: 200 },
-  [ShipType.BATTLESHIP]: { maxHp: 900, speed: 24, firepower: 130, range: 280 },
-  [ShipType.CARRIER]: { maxHp: 500, speed: 26, firepower: 60, range: 360 },
+  [ShipType.DESTROYER]: { maxHp: 200, speed: 36 },
+  [ShipType.CRUISER]: { maxHp: 380, speed: 30 },
+  [ShipType.BATTLESHIP]: { maxHp: 900, speed: 24 },
+  [ShipType.CARRIER]: { maxHp: 500, speed: 26 },
 }
 
 export class EnemySpawner {
@@ -54,8 +53,6 @@ export class EnemySpawner {
       position,
       stats.maxHp,
       stats.speed,
-      stats.firepower,
-      stats.range,
       Faction.ENEMY
     )
   }

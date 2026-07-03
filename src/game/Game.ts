@@ -16,7 +16,7 @@ import {
   VoiceRecognitionService,
   VoiceRecognitionStatus,
 } from '@/voice/VoiceRecognitionService'
-import { Faction } from '@/types'
+import { Faction, WeaponType } from '@/types'
 
 interface HitEffect {
   x1: number
@@ -24,7 +24,16 @@ interface HitEffect {
   x2: number
   y2: number
   ttl: number
+  maxTtl: number
   color: string
+  weaponType: WeaponType
+}
+
+/** 兵器種別ごとの命中エフェクト表示時間（秒） */
+const HIT_EFFECT_DURATION: Record<WeaponType, number> = {
+  [WeaponType.GUN]: 0.3,
+  [WeaponType.TORPEDO]: 0.5,
+  [WeaponType.AIRCRAFT]: 0.6,
 }
 
 export class Game {
@@ -467,17 +476,21 @@ export class Game {
     if (events.length === 0) return
 
     events.forEach((event) => {
+      const duration = HIT_EFFECT_DURATION[event.weaponType]
       this.hitEffects.push({
         x1: event.attacker.position.x,
         y1: event.attacker.position.y,
         x2: event.target.position.x,
         y2: event.target.position.y,
-        ttl: 0.3,
+        ttl: duration,
+        maxTtl: duration,
         color: event.attacker.faction === Faction.ENEMY ? '#ef5350' : '#4fc3f7',
+        weaponType: event.weaponType,
       })
 
       if (event.targetSunk) {
-        const label = event.target.faction === Faction.ENEMY ? '敵' : '味方'
+        // 敵艦名は生成時点で「敵」を含むため、味方艦にのみラベルを付与する
+        const label = event.target.faction === Faction.ENEMY ? '' : '味方'
         this.pushBattleMessage(`💥 ${label}${event.target.name} 撃沈！`)
       }
     })
@@ -608,11 +621,27 @@ export class Game {
    */
   private renderHitEffects(): void {
     this.hitEffects.forEach((effect) => {
-      const alpha = Math.max(0, Math.min(1, effect.ttl / 0.3))
+      const alpha = Math.max(0, Math.min(1, effect.ttl / effect.maxTtl))
       this.ctx.save()
       this.ctx.globalAlpha = alpha
       this.ctx.strokeStyle = effect.color
-      this.ctx.lineWidth = 2
+
+      // 兵器種別ごとに線種を変え、砲撃・雷撃・航空攻撃を視覚的に区別する
+      switch (effect.weaponType) {
+        case WeaponType.GUN:
+          this.ctx.lineWidth = 2
+          this.ctx.setLineDash([])
+          break
+        case WeaponType.TORPEDO:
+          this.ctx.lineWidth = 3
+          this.ctx.setLineDash([])
+          break
+        case WeaponType.AIRCRAFT:
+          this.ctx.lineWidth = 2
+          this.ctx.setLineDash([6, 4])
+          break
+      }
+
       this.ctx.beginPath()
       this.ctx.moveTo(effect.x1, effect.y1)
       this.ctx.lineTo(effect.x2, effect.y2)
@@ -690,6 +719,7 @@ export class Game {
       const selected = ship.isSelected ? '✓' : ''
       const hpRatio = (ship.hp / ship.maxHp) * 100
       const color = hpRatio > 50 ? '#66bb6a' : hpRatio > 25 ? '#ffa726' : '#ef5350'
+      const weaponIcons = ship.weapons.map((w) => this.getWeaponIcon(w.type)).join(' ')
 
       html += `
         <div style="
@@ -700,7 +730,7 @@ export class Game {
           border-left: 3px solid ${color};
         ">
           <div style="display: flex; justify-content: space-between;">
-            <span>${selected} ${ship.name}</span>
+            <span>${selected} ${ship.name} ${weaponIcons}</span>
             <span style="color: ${color};">${Math.round(hpRatio)}%</span>
           </div>
         </div>
@@ -708,6 +738,22 @@ export class Game {
     })
 
     fleetList.innerHTML = html
+  }
+
+  /**
+   * 兵器種別に応じたアイコンを取得
+   */
+  private getWeaponIcon(type: WeaponType): string {
+    switch (type) {
+      case WeaponType.GUN:
+        return '🔫'
+      case WeaponType.TORPEDO:
+        return '🐟'
+      case WeaponType.AIRCRAFT:
+        return '✈️'
+      default:
+        return ''
+    }
   }
 
   /**
@@ -737,6 +783,7 @@ export class Game {
     activeShips.forEach((ship) => {
       const hpRatio = (ship.hp / ship.maxHp) * 100
       const color = hpRatio > 50 ? '#66bb6a' : hpRatio > 25 ? '#ffa726' : '#ef5350'
+      const weaponIcons = ship.weapons.map((w) => this.getWeaponIcon(w.type)).join(' ')
 
       html += `
         <div style="
@@ -747,7 +794,7 @@ export class Game {
           border-left: 3px solid ${color};
         ">
           <div style="display: flex; justify-content: space-between;">
-            <span>${ship.name}</span>
+            <span>${ship.name} ${weaponIcons}</span>
             <span style="color: ${color};">${Math.round(hpRatio)}%</span>
           </div>
         </div>

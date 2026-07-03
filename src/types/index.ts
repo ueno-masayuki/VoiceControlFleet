@@ -28,6 +28,23 @@ export enum Faction {
   ENEMY = 'ENEMY',
 }
 
+// 兵器種別（第二次大戦期の艦隊戦兵装）
+export enum WeaponType {
+  GUN = 'GUN',           // 艦砲
+  TORPEDO = 'TORPEDO',   // 魚雷
+  AIRCRAFT = 'AIRCRAFT', // 艦載機
+}
+
+// 兵器
+export interface Weapon {
+  type: WeaponType
+  name: string
+  damage: number     // 命中時のダメージ
+  range: number       // 射程
+  reloadTime: number // 再装填（発射間隔）秒
+  accuracy: number   // 命中率 (0-1)
+}
+
 // 艦船の状態
 export interface Ship {
   id: string
@@ -39,8 +56,8 @@ export interface Ship {
   hp: number
   maxHp: number
   speed: number
-  firepower: number
-  range: number
+  size: number
+  weapons: Weapon[]
   isSelected: boolean
 }
 

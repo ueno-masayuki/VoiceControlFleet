@@ -22,7 +22,7 @@ export class EnemyAI {
       const nearest = this.findNearestShip(ship, playerFleet.ships)
       if (!nearest) return
 
-      const standoffDistance = ship.range * this.STANDOFF_RATIO
+      const standoffDistance = ship.getMaxWeaponRange() * this.STANDOFF_RATIO
 
       if (ship.distanceTo(nearest) > standoffDistance) {
         // 射程外なら接近

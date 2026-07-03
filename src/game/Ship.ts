@@ -4,8 +4,9 @@
  * 個別の艦船の状態と振る舞いを管理
  */
 
-import { Ship as IShip, Position, Velocity, ShipType, Faction } from '@/types'
+import { Ship as IShip, Position, Velocity, ShipType, Faction, Weapon, WeaponType } from '@/types'
 import { SHIP_COLORS } from './ShipData'
+import { WEAPON_LOADOUTS, SHIP_SIZES } from './WeaponData'
 
 const FACTION_OUTLINE_COLOR: Record<Faction, string> = {
   [Faction.PLAYER]: '#01579b',
@@ -22,12 +23,12 @@ export class Ship implements IShip {
   hp: number
   maxHp: number
   speed: number
-  firepower: number
-  range: number
+  size: number
+  weapons: Weapon[]
   isSelected: boolean
 
   private targetPosition: Position | null = null
-  private attackCooldownRemaining: number = 0
+  private weaponCooldowns: number[]
 
   constructor(
     id: string,
@@ -36,8 +37,6 @@ export class Ship implements IShip {
     position: Position,
     maxHp: number,
     speed: number,
-    firepower: number,
-    range: number,
     faction: Faction = Faction.PLAYER
   ) {
     this.id = id
@@ -49,8 +48,9 @@ export class Ship implements IShip {
     this.hp = maxHp
     this.maxHp = maxHp
     this.speed = speed
-    this.firepower = firepower
-    this.range = range
+    this.size = SHIP_SIZES[type]
+    this.weapons = WEAPON_LOADOUTS[type]
+    this.weaponCooldowns = this.weapons.map(() => 0)
     this.isSelected = false
   }
 
@@ -94,12 +94,11 @@ export class Ship implements IShip {
       ctx.strokeStyle = '#ffeb3b'
       ctx.lineWidth = 3
       ctx.beginPath()
-      ctx.arc(this.position.x, this.position.y, 25, 0, Math.PI * 2)
+      ctx.arc(this.position.x, this.position.y, this.size + 5, 0, Math.PI * 2)
       ctx.stroke()
     }
 
     // 艦船本体（三角形で表現）
-    const size = this.getSize()
     ctx.fillStyle = color
     ctx.beginPath()
 
@@ -109,10 +108,10 @@ export class Ship implements IShip {
     ctx.translate(this.position.x, this.position.y)
     ctx.rotate(angle || 0)
 
-    // 三角形の描画
-    ctx.moveTo(size, 0)
-    ctx.lineTo(-size / 2, size / 2)
-    ctx.lineTo(-size / 2, -size / 2)
+    // 三角形の描画（艦種ごとのsizeで艦体の大きさを表現）
+    ctx.moveTo(this.size, 0)
+    ctx.lineTo(-this.size / 2, this.size / 2)
+    ctx.lineTo(-this.size / 2, -this.size / 2)
     ctx.closePath()
     ctx.fill()
 
@@ -137,7 +136,7 @@ export class Ship implements IShip {
     const barWidth = 40
     const barHeight = 5
     const x = this.position.x - barWidth / 2
-    const y = this.position.y - 30
+    const y = this.position.y - this.size - 15
 
     // 背景
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
@@ -161,32 +160,14 @@ export class Ship implements IShip {
     ctx.fillStyle = '#ffffff'
     ctx.font = '12px "Segoe UI"'
     ctx.textAlign = 'center'
-    ctx.fillText(this.name, this.position.x, this.position.y + 35)
+    ctx.fillText(this.name, this.position.x, this.position.y + this.size + 20)
   }
 
   /**
    * 衝突判定用の半径（他艦との最低離隔距離の基準）
    */
   getCollisionRadius(): number {
-    return this.getSize() + 6
-  }
-
-  /**
-   * 艦種に応じたサイズ
-   */
-  private getSize(): number {
-    switch (this.type) {
-      case ShipType.BATTLESHIP:
-        return 20
-      case ShipType.CARRIER:
-        return 18
-      case ShipType.CRUISER:
-        return 15
-      case ShipType.DESTROYER:
-        return 12
-      default:
-        return 15
-    }
+    return this.size + 6
   }
 
   /**
@@ -203,7 +184,7 @@ export class Ship implements IShip {
     const dx = x - this.position.x
     const dy = y - this.position.y
     const distance = Math.sqrt(dx * dx + dy * dy)
-    return distance < this.getSize() + 10
+    return distance < this.size + 10
   }
 
   /**
@@ -223,37 +204,39 @@ export class Ship implements IShip {
   }
 
   /**
-   * 対象が射程内か
+   * 保有兵器の最大射程
    */
-  isInRange(target: Ship): boolean {
-    return this.distanceTo(target) <= this.range
+  getMaxWeaponRange(): number {
+    if (this.weapons.length === 0) return 0
+    return Math.max(...this.weapons.map((w) => w.range))
   }
 
   /**
-   * 攻撃クールダウンの経過
+   * 兵器の再装填クールダウンを進める
    */
-  tickCooldown(deltaTime: number): void {
-    if (this.attackCooldownRemaining > 0) {
-      this.attackCooldownRemaining = Math.max(0, this.attackCooldownRemaining - deltaTime)
+  tickWeaponCooldowns(deltaTime: number): void {
+    this.weaponCooldowns = this.weaponCooldowns.map((cooldown) =>
+      Math.max(0, cooldown - deltaTime)
+    )
+  }
+
+  /**
+   * 指定した兵器で対象を攻撃する。再装填中なら null を返す
+   */
+  fireWeapon(index: number, target: Ship): { damage: number; weaponType: WeaponType } | null {
+    const weapon = this.weapons[index]
+    if (!weapon || this.isSunk() || this.weaponCooldowns[index] > 0) return null
+
+    this.weaponCooldowns[index] = weapon.reloadTime
+
+    const hit = Math.random() < weapon.accuracy
+    const damage = hit ? Math.round(weapon.damage * (0.85 + Math.random() * 0.3)) : 0
+
+    if (hit) {
+      target.takeDamage(damage)
     }
-  }
 
-  /**
-   * 射撃可能か（撃沈済みでなく、クールダウンが解けている）
-   */
-  canFire(): boolean {
-    return !this.isSunk() && this.attackCooldownRemaining <= 0
-  }
-
-  /**
-   * 対象を砲撃する。実際に与えたダメージを返す
-   */
-  fire(target: Ship, cooldownSeconds: number): number {
-    const variance = 0.8 + Math.random() * 0.4
-    const damage = Math.round(this.firepower * variance)
-    target.takeDamage(damage)
-    this.attackCooldownRemaining = cooldownSeconds
-    return damage
+    return { damage, weaponType: weapon.type }
   }
 
   /**

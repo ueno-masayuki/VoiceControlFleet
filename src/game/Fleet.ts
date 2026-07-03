@@ -53,8 +53,6 @@ export class Fleet implements IFleet {
       position,
       template.maxHp,
       template.speed,
-      template.firepower,
-      template.range,
       Faction.PLAYER
     )
   }
