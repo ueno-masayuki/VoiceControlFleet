@@ -221,9 +221,10 @@ export class Ship implements IShip {
   }
 
   /**
-   * 指定した兵器で対象を攻撃する。再装填中なら null を返す
+   * 指定した兵器を発射する。再装填中なら null を返す
+   * ダメージの適用は行わず、命中判定と結果のみを返す（実際の着弾処理は Projectile が担う）
    */
-  fireWeapon(index: number, target: Ship): { damage: number; weaponType: WeaponType } | null {
+  fireWeapon(index: number): { damage: number; weaponType: WeaponType; hit: boolean } | null {
     const weapon = this.weapons[index]
     if (!weapon || this.isSunk() || this.weaponCooldowns[index] > 0) return null
 
@@ -232,11 +233,7 @@ export class Ship implements IShip {
     const hit = Math.random() < weapon.accuracy
     const damage = hit ? Math.round(weapon.damage * (0.85 + Math.random() * 0.3)) : 0
 
-    if (hit) {
-      target.takeDamage(damage)
-    }
-
-    return { damage, weaponType: weapon.type }
+    return { damage, weaponType: weapon.type, hit }
   }
 
   /**

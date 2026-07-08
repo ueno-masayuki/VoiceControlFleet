@@ -18,24 +18,6 @@ import {
 } from '@/voice/VoiceRecognitionService'
 import { Faction, WeaponType } from '@/types'
 
-interface HitEffect {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-  ttl: number
-  maxTtl: number
-  color: string
-  weaponType: WeaponType
-}
-
-/** 兵器種別ごとの命中エフェクト表示時間（秒） */
-const HIT_EFFECT_DURATION: Record<WeaponType, number> = {
-  [WeaponType.GUN]: 0.3,
-  [WeaponType.TORPEDO]: 0.5,
-  [WeaponType.AIRCRAFT]: 0.6,
-}
-
 export class Game {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
@@ -54,7 +36,6 @@ export class Game {
   private enemyAI: EnemyAI
   private enemySpawner: EnemySpawner
   private collisionSystem: CollisionSystem
-  private hitEffects: HitEffect[] = []
 
   // ゲームマスター
   private gameMaster: GameMasterService
@@ -465,29 +446,17 @@ export class Game {
       }
     }
 
-    this.updateHitEffects(deltaTime)
     this.updateBattleMessages(deltaTime)
   }
 
   /**
-   * 戦闘イベントの処理（エフェクト・撃沈メッセージ・パネル更新）
+   * 戦闘イベントの処理（撃沈メッセージ・パネル更新）
+   * 着弾の様子そのものは CombatSystem が管理する Projectile が描画する
    */
   private handleCombatEvents(events: CombatEvent[]): void {
     if (events.length === 0) return
 
     events.forEach((event) => {
-      const duration = HIT_EFFECT_DURATION[event.weaponType]
-      this.hitEffects.push({
-        x1: event.attacker.position.x,
-        y1: event.attacker.position.y,
-        x2: event.target.position.x,
-        y2: event.target.position.y,
-        ttl: duration,
-        maxTtl: duration,
-        color: event.attacker.faction === Faction.ENEMY ? '#ef5350' : '#4fc3f7',
-        weaponType: event.weaponType,
-      })
-
       if (event.targetSunk) {
         // 敵艦名は生成時点で「敵」を含むため、味方艦にのみラベルを付与する
         const label = event.target.faction === Faction.ENEMY ? '' : '味方'
@@ -578,16 +547,6 @@ export class Game {
   }
 
   /**
-   * 命中エフェクトの経過更新
-   */
-  private updateHitEffects(deltaTime: number): void {
-    this.hitEffects.forEach((effect) => {
-      effect.ttl -= deltaTime
-    })
-    this.hitEffects = this.hitEffects.filter((effect) => effect.ttl > 0)
-  }
-
-  /**
    * 描画
    */
   private render(): void {
@@ -605,49 +564,15 @@ export class Game {
     // グリッド描画（海面）
     this.drawGrid()
 
-    // 命中エフェクト（艦船の下に描画）
-    this.renderHitEffects()
-
     // 艦隊の描画
     this.playerFleet.render(this.ctx)
     this.enemyFleet.render(this.ctx)
 
+    // 飛翔中の砲弾・魚雷・艦載機と着弾エフェクト
+    this.combatSystem.render(this.ctx)
+
     // 操作ヘルプ
     this.drawHelp()
-  }
-
-  /**
-   * 命中エフェクトの描画
-   */
-  private renderHitEffects(): void {
-    this.hitEffects.forEach((effect) => {
-      const alpha = Math.max(0, Math.min(1, effect.ttl / effect.maxTtl))
-      this.ctx.save()
-      this.ctx.globalAlpha = alpha
-      this.ctx.strokeStyle = effect.color
-
-      // 兵器種別ごとに線種を変え、砲撃・雷撃・航空攻撃を視覚的に区別する
-      switch (effect.weaponType) {
-        case WeaponType.GUN:
-          this.ctx.lineWidth = 2
-          this.ctx.setLineDash([])
-          break
-        case WeaponType.TORPEDO:
-          this.ctx.lineWidth = 3
-          this.ctx.setLineDash([])
-          break
-        case WeaponType.AIRCRAFT:
-          this.ctx.lineWidth = 2
-          this.ctx.setLineDash([6, 4])
-          break
-      }
-
-      this.ctx.beginPath()
-      this.ctx.moveTo(effect.x1, effect.y1)
-      this.ctx.lineTo(effect.x2, effect.y2)
-      this.ctx.stroke()
-      this.ctx.restore()
-    })
   }
 
   /**
